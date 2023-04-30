@@ -1,29 +1,43 @@
+import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, LSTM, Dense, TimeDistributed, Reshape
+from tensorflow.keras.models import Model
 
-# Define the input layer.
-input_layer = tf.keras.layers.Input(shape=(440, 500, 4))
+def create_cnn_lstm_model(input_shape, output_size=15, max_vram=2):
+    # Calculate the size of the LSTM layer based on the maximum VRAM constraint
+    lstm_units = int((max_vram * 1024**3) / (4 * input_shape[0] * input_shape[1]))
 
-# Define the convolutional layers.
-conv1 = tf.keras.layers.Conv2D(32, (3, 3), activation='relu')(input_layer)
-conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation='relu')(conv1)
-conv3 = tf.keras.layers.Conv2D(128, (3, 3), activation='relu')(conv2)
+    # Input layer for the image
+    input_img = Input(shape=input_shape)
 
-# Define the pooling layers.
-pool1 = tf.keras.layers.MaxPool2D((2, 2))(conv3)
-pool2 = tf.keras.layers.MaxPool2D((2, 2))(pool1)
+    # CNN layers
+    x = Conv2D(32, (3, 3), activation='relu')(input_img)
+    x = MaxPooling2D((2, 2))(x)
+    x = Conv2D(64, (3, 3), activation='relu')(x)
+    x = MaxPooling2D((2, 2))(x)
+    x = Conv2D(128, (3, 3), activation='relu')(x)
+    x = MaxPooling2D((2, 2))(x)
 
-# Define the recurrent layers.
-lstm1 = tf.keras.layers.LSTM(128)(pool2)
-lstm2 = tf.keras.layers.LSTM(64)(lstm1)
+    # Flatten the CNN output
+    x = Flatten()(x)
 
-# Define the output layer.
-output_layer = tf.keras.layers.Dense(9, activation='softmax')(lstm2)
+    # Reshape the flattened output to a sequence
+    x = Reshape((1, -1))(x)
 
-# Define the model.
-model = tf.keras.models.Model(input_layer, output_layer)
+    # LSTM layer with the calculated number of units
+    x = LSTM(32, activation='tanh')(x)
 
-# Compile the model.
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    # Dense output layer
+    output = Dense(output_size, activation='linear')(x)
 
-# Display the model summary
+    # Create the model
+    model = Model(input_img, output)
+
+    return model
+
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
+input_shape = (880, 1000, 4)
+model = create_cnn_lstm_model(input_shape)
+model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
 model.summary()
