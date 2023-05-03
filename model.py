@@ -5,13 +5,14 @@ from tensorflow.keras.models import Model
 
 def create_cnn_lstm_model(input_shape, output_size=15, max_vram=2):
     # Calculate the size of the LSTM layer based on the maximum VRAM constraint
-    lstm_units = int((max_vram * 1024**3) / (4 * input_shape[0] * input_shape[1]))
+    # lstm_units = int((max_vram * 1024**3) / (4 * input_shape[0] * input_shape[1]))
 
     # Input layer for the image
     input_img = Input(shape=input_shape)
 
     # CNN layers
-    x = Conv2D(32, (3, 3), activation='relu')(input_img)
+    x = MaxPooling2D(pool_size=(2, 2))(input_img)
+    x = Conv2D(32, (3, 3), activation='relu')(x)
     x = MaxPooling2D((2, 2))(x)
     x = Conv2D(64, (3, 3), activation='relu')(x)
     x = MaxPooling2D((2, 2))(x)
@@ -35,9 +36,9 @@ def create_cnn_lstm_model(input_shape, output_size=15, max_vram=2):
 
     return model
 
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+# print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-input_shape = (880, 1000, 4)
-model = create_cnn_lstm_model(input_shape)
-model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
-model.summary()
+# input_shape = (880, 1000, 4)
+# model = create_cnn_lstm_model(input_shape)
+# model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
+# model.summary()

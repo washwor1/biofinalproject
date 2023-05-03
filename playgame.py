@@ -1,9 +1,13 @@
 from selenium import webdriver
+from selenium.webdriver import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import cv2
+import io
 from PIL import Image
 import pytesseract
 import io
@@ -11,6 +15,9 @@ import numpy as np
 import tensorflow as tf
 
 def play_game(model):
+    center = (500,440)
+    loop_duration = 0
+    mouse = [0,0]
     score = 0
     run_time = 0
     fitness = 0.0
@@ -56,7 +63,7 @@ def play_game(model):
     chrome_options.add_argument("--gpu-driver")
     driver = webdriver.Chrome(options=chrome_options)
     driver.get('https://diep.io/')
-
+    action_chains = ActionChains(driver)
 
 
     while True:
@@ -88,7 +95,9 @@ def play_game(model):
     driver.execute_script(fps_counter_js)
 
     try:
-        for i in (0,0,0):
+        mouse = moveMouseTo(action_chains, mouse, center)
+        for i in (1,2,3):
+            image_list = []
             start_time = time.time()
             time.sleep(2)
             while True:
@@ -103,25 +112,39 @@ def play_game(model):
                     EC.presence_of_element_located((By.CSS_SELECTOR, "#username-row > d-button"))
                 )
             element.click()   
-
+            
             while True:
                 screen_element = driver.execute_script('return document.querySelector("d-base.diep-native").shadowRoot.querySelector("d-stats");')
                 if screen_element:
+                    width, height = image_list[0].size
                     loop_duration = time.time() - start_time
+                    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                    video = cv2.VideoWriter(f'recording{i}.avi', fourcc, len(image_list)/loop_duration, (width, height))
+                    for image in image_list:
+                        # Convert the PIL image to an OpenCV compatible format
+                        open_cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+                        video.write(open_cv_image)
+                    # Release the video file
+                    video.release()
                     break
                 
 
+                
+                #take screenshot, open it with PIL, add it to recording list
                 screenshot_png = driver.get_screenshot_as_png()
                 img = Image.open(io.BytesIO(screenshot_png))
-                scaled_size = (220, 250)  # Adjust the scaling factor as needed
-                input_img = img.resize(scaled_size, Image.Resampling.LANCZOS)
-                input_data = np.expand_dims(input_img, axis=0)
-                predictions = model.predict(input_data)
+                image_list.append(img)
 
-                print(predictions)
+                #Convert image to numpy array
+                img_arr = np.array(img)
+                img_arr = np.expand_dims(img_arr, axis=0)
 
+                #made a prediction using screenshot
+                predictions = model.predict(img_arr)
+                
+                #take output tensor from the model and send the controls to the browser using action chains.
+                mouse = handleInputs(predictions, action_chains, mouse)
 
-                time.sleep(5)
 
             time.sleep(2)
             screenshot_png = driver.get_screenshot_as_png()
@@ -134,7 +157,7 @@ def play_game(model):
             threshold = 195
             score_img = score_img.point(lambda p: p > threshold and 255)
 
-            img.save("game_window_screenshot.png")
+            score_img.save("game_window_screenshot.png")
 
             score_text = pytesseract.image_to_string(score_img, config="--psm 6 --oem 3")
             score_text = score_text.replace(',', '')
@@ -151,7 +174,8 @@ def play_game(model):
                     EC.presence_of_element_located((By.CSS_SELECTOR, "#continue"))
                 )
             element.click() 
-    except:
+    except Exception as e:
+        print(e)
         driver.quit()
         fitness = play_game(model)
 
@@ -163,7 +187,7 @@ def play_game(model):
 def fitness_function(score, time_alive):
     # Normalize the score and time_alive by dividing by the maximum possible values
     normalized_score = score / 100000
-    normalized_time_alive = time_alive / 36000
+    normalized_time_alive = time_alive / 18000
 
     # Assign weights to each component
     weight_score = 0.8
@@ -173,3 +197,62 @@ def fitness_function(score, time_alive):
     fitness = weight_score * normalized_score + weight_time_alive * normalized_time_alive
 
     return fitness
+
+
+
+
+def moveMouseTo(action, mouse, pos):
+    x_offset = pos[0] - mouse[0]
+    y_offset = pos[1] - mouse[1]
+    action.move_by_offset(x_offset, y_offset).perform()
+    mouse[0] += x_offset
+    mouse[1] += y_offset
+    return mouse
+
+
+def handleInputs(prediction, action, mouse):
+    if (prediction[0][0] > 0):
+        action.key_down('w')
+    else:
+        action.key_up('w')
+    if (prediction[0][1] > 0):
+        action.key_down('a')
+    else:
+        action.key_up('a')
+    if (prediction[0][2] > 0):
+        action.key_down('s')
+    else:
+        action.key_up('s')
+    if (prediction[0][3] > 0):
+        action.key_down('d')
+    else:
+        action.key_up('d')
+    if (prediction[0][4] > 0):
+        action.send_keys('1')
+    if (prediction[0][5] > 0):
+        action.send_keys('2')
+    if (prediction[0][6] > 0):
+        action.send_keys('3')
+    if (prediction[0][7] > 0):
+        action.send_keys('4')
+    if (prediction[0][8] > 0):
+        action.send_keys('5')
+    if (prediction[0][9] > 0):
+        action.send_keys('6')
+    if (prediction[0][10] > 0):
+        action.send_keys('7')
+    if (prediction[0][11] > 0):
+        action.send_keys('8')
+    if (prediction[0][12] > 0):
+        action.click_and_hold()
+    else:
+        action.release()
+    
+    offset_X = 500 + (prediction[0][13] * 100)
+    offset_Y = 440 + (prediction[0][14] * 100)
+    mouse = moveMouseTo(action, mouse, (offset_X, offset_Y))
+
+    action.perform()
+    return mouse
+
+
