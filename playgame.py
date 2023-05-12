@@ -14,7 +14,9 @@ import io
 import numpy as np
 import tensorflow as tf
 
-def play_game(model):
+def play_game(model, fail = 0):
+    fail_count = 0
+    fail_count = fail
     center = (500,440)
     loop_duration = 0
     mouse = [0,0]
@@ -116,16 +118,16 @@ def play_game(model):
             while True:
                 screen_element = driver.execute_script('return document.querySelector("d-base.diep-native").shadowRoot.querySelector("d-stats");')
                 if screen_element:
-                    width, height = image_list[0].size
-                    loop_duration = time.time() - start_time
-                    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                    video = cv2.VideoWriter(f'recording{i}.avi', fourcc, len(image_list)/loop_duration, (width, height))
-                    for image in image_list:
-                        # Convert the PIL image to an OpenCV compatible format
-                        open_cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-                        video.write(open_cv_image)
-                    # Release the video file
-                    video.release()
+                    # width, height = image_list[0].size
+                    # loop_duration = time.time() - start_time
+                    # fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                    # video = cv2.VideoWriter(f'recording{i}.avi', fourcc, len(image_list)/loop_duration, (width, height))
+                    # for image in image_list:
+                    #     # Convert the PIL image to an OpenCV compatible format
+                    #     open_cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+                    #     video.write(open_cv_image)
+                    # # Release the video file
+                    # video.release()
                     break
                 
 
@@ -133,9 +135,9 @@ def play_game(model):
                 #take screenshot, open it with PIL, add it to recording list
                 screenshot_png = driver.get_screenshot_as_png()
                 img = Image.open(io.BytesIO(screenshot_png))
-                image_list.append(img)
+                # image_list.append(img)
 
-                #Convert image to numpy array
+                # #Convert image to numpy array
                 img_arr = np.array(img)
                 img_arr = np.expand_dims(img_arr, axis=0)
 
@@ -177,17 +179,18 @@ def play_game(model):
     except Exception as e:
         print(e)
         driver.quit()
-        fitness = play_game(model)
+        fail_count += 1
+        fitness, fail_count = play_game(model,fail_count)
 
     if fitness == 0:
         fitness = fitness_function(score,run_time) 
-    return fitness
+    return fitness, fail_count
 
 
 def fitness_function(score, time_alive):
     # Normalize the score and time_alive by dividing by the maximum possible values
-    normalized_score = score / 100000
-    normalized_time_alive = time_alive / 18000
+    normalized_score = score / 50000
+    normalized_time_alive = time_alive / 6000
 
     # Assign weights to each component
     weight_score = 0.8
