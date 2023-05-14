@@ -6,7 +6,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import time
-import cv2
 import io
 from PIL import Image
 import pytesseract
@@ -15,6 +14,7 @@ import numpy as np
 import tensorflow as tf
 
 def play_game(model, fail = 0):
+
     fail_count = 0
     fail_count = fail
     center = (500,440)
@@ -251,8 +251,9 @@ def handleInputs(prediction, action, mouse):
     else:
         action.release()
     
-    offset_X = 500 + (prediction[0][13] * 100)
-    offset_Y = 440 + (prediction[0][14] * 100)
+    offset_X = 500 + max(min(prediction[0][13] * 100, 100), -100)
+    offset_Y = 440 + max(min(prediction[0][14] * 100, 100), -100)
+
     mouse = moveMouseTo(action, mouse, (offset_X, offset_Y))
 
     action.perform()

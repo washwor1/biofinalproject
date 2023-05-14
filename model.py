@@ -12,11 +12,11 @@ def create_cnn_lstm_model(input_shape, output_size=15, max_vram=2):
 
     # CNN layers
     x = MaxPooling2D(pool_size=(2, 2))(input_img)
+    x = Conv2D(16, (3, 3), activation='relu')(x)
+    x = MaxPooling2D((2, 2))(x)
     x = Conv2D(32, (3, 3), activation='relu')(x)
     x = MaxPooling2D((2, 2))(x)
     x = Conv2D(64, (3, 3), activation='relu')(x)
-    x = MaxPooling2D((2, 2))(x)
-    x = Conv2D(128, (3, 3), activation='relu')(x)
     x = MaxPooling2D((2, 2))(x)
 
     # Flatten the CNN output
@@ -26,7 +26,7 @@ def create_cnn_lstm_model(input_shape, output_size=15, max_vram=2):
     x = Reshape((1, -1))(x)
 
     # LSTM layer with the calculated number of units
-    x = LSTM(32, activation='tanh')(x)
+    x = LSTM(24, activation='tanh')(x)
 
     # Dense output layer
     output = Dense(output_size, activation='linear')(x)

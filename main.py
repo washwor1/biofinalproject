@@ -1,90 +1,117 @@
-import numpy as np
-from deap import base, creator, tools, algorithms
+import random
 import time
-import csv
+import numpy as np
 import pandas as pd
+from deap import base, creator, tools, algorithms
+from keras.models import clone_model
+import playgame as pg
 import model as m
+import tensorflow as tf
 
-# Initialize DEAP toolbox
+# Variables for GA
+POP_SIZE = 10
+NGEN = 10
+CXPB = 0.7
+MUTPB = 0.3
+
+# Define the fitness function
+def fitness(individual):
+    weights = array_to_weights(individual)
+    model = clone_model(base_model)
+    model.set_weights(weights)
+    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
+    fit, _ = pg.play_game(model)
+    return fit,
+
+# Transform array of weights to the weight and bias shapes for the layers in the model
+
+import numpy as np
+
+def array_to_weights(weight_values):
+    weight_shapes = [(3, 3, 4, 16), (16,), (3, 3, 16, 32), (32,), (3, 3, 32, 64), (64,),
+                     (203520, 96), (24, 96), (96,), (24, 15), (15,)]
+    
+    weights = []
+    start = 0
+    
+    for shape in weight_shapes:
+        size = np.prod(shape)
+        weights.append(np.array(weight_values[start:start+size]).reshape(shape))
+        start += size
+    
+    return weights
+
+
+
+
+# Define the mutation operation
+def mutate(individual):
+    for i in range(len(individual)):
+        if random.random() < MUTPB:
+            individual[i] += random.gauss(0, 0.1)
+    return individual,
+
+# Create the base model
+input_shape = (880, 1000, 4)
+base_model = m.create_cnn_lstm_model(input_shape)
+
+# bruh =base_model.get_weights()
+# for array in bruh:
+#     print(array.shape)
+
+print(base_model.layers[8].output_shape)
+
+# Initialize the DEAP tools
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", list, fitness=creator.FitnessMax)
+print("a\n")
 toolbox = base.Toolbox()
-input_shape = (880,1000,4)
-# Define the fitness function and individual type
-creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0))  # Maximizing fitness function
-creator.create("Individual", np.ndarray, fitness=creator.FitnessMax)
+print("a\n")
 
-# Define the individual and population initialization functions
-def create_individual():
-    return m.create_cnn_lstm_model(input_shape)
+def attr_float():
+    return random.uniform(-1, 1)
 
-def create_population(n):
-    return [create_individual() for _ in range(n)]
-
-toolbox.register("individual", create_individual)
-toolbox.register("population", create_population)
-
-# Define the evaluation function
-def evaluate_individual(individual):
-    fitness, fail = pg.play_game(individual)
-    return fitness, fail
-
-toolbox.register("evaluate", evaluate_individual)
-
-# Define the selection, mutation, and crossover operators
+toolbox.register("attr_float", attr_float)
+toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, sum([np.prod(w.shape) for w in base_model.get_weights()]))
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+toolbox.register("evaluate", fitness)
+toolbox.register("mate", tools.cxUniform, indpb=0.5)
+toolbox.register("mutate", mutate)
 toolbox.register("select", tools.selTournament, tournsize=3)
-toolbox.register("mate", tools.cxTwoPoint)
-toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=1, indpb=0.1)
+print("a\n")
 
-# Initialize the population
-population = toolbox.population(n=10)
+# Initialize the population and hall of fame
+pop = toolbox.population(n=POP_SIZE)
+hof = tools.HallOfFame(1)
 
-# Prepare statistics
+# Track statistics
 stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-stats.register("avg", np.mean, axis=0)
-stats.register("median", np.median, axis=0)
-stats.register("max", np.max, axis=0)
+stats.register("avg", np.mean)
+stats.register("min", np.min)
+stats.register("max", np.max)
+stats.register("std", np.std)
 
-# Prepare CSV file
-with open('stats.csv', 'w', newline='') as csvfile:
-    fieldnames = ['generation', 'avg_fitness', 'median_fitness', 'max_fitness', 'failure_rate', 'time_elapsed']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
+logbook = tools.Logbook()  # create logbook outside the loop
+times = []
 
-# Evolutionary loop
-for gen in range(10):
+for gen in range(NGEN):
     start_time = time.time()
-    
-    # Perform the genetic operations
-    offspring = algorithms.varAnd(population, toolbox, cxpb=0.5, mutpb=0.2)
-    fits = toolbox.map(toolbox.evaluate, offspring)
-    
-    # Update the fitness values
-    for fit, ind in zip(fits, offspring):
-        ind.fitness.values = fit
-    
-    population = toolbox.select(offspring, k=len(population))
-    
-    # Gather statistics
-    record = stats.compile(population)
-    
-    # Print the stats
-    print(f"Generation {gen}:")
-    print(f"  Avg Fitness: {record['avg'][0]}")
-    print(f"  Median Fitness: {record['median'][0]}")
-    print(f"  Max Fitness: {record['max'][0]}")
-    print(f"  Failure Rate: {record['avg'][1]}")
-    
-    # Write to CSV
-    with open('stats.csv', 'a', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({
-            'generation': gen,
-            'avg_fitness': record['avg'][0],
-            'median_fitness': record['median'][0],
-            'max_fitness': record['max'][0],
-            'failure_rate': record['avg'][1],
-            'time_elapsed': time.time() - start_time
-        })
+    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=CXPB, mutpb=MUTPB, ngen=1, stats=stats, halloffame=hof, verbose=True)
+    end_time = time.time()
+    times.append(end_time - start_time)
+    logbook.record(time_per_gen=times[-1], **log[0])  # update the logbook with the new log
 
-    # Save the model weights after each generation
-    for i, model in enumerate(population):
-        model.save_weights(f'model_weights_gen_{gen}_ind_{i}.h5')
+# Save the statistics to a CSV
+df = pd.DataFrame(logbook)
+df['time_per_gen'] = times
+df.to_csv('evolution_stats.csv', index=False)
+
+# Output the best individual and its fitness score
+best_individual = hof[0]
+best_fitness = fitness(best_individual)
+print(f"Best Individual: {best_individual}")
+print(f"Best Fitness: {best_fitness}")
+
+# Save the weights of the best individual
+best_weights = array_to_weights(best_individual)
+np.save('best_weights.npy', best_weights)
